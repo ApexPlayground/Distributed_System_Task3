@@ -106,12 +106,26 @@ void coordinator() {
     for (int i = 0; i < ciphertext.length(); ++i) {
         numbers[i] = ciphertext[i] - 'A';
     }
-
-   
     numbers[ciphertext.length()] = 0;
 
+    int blockSize = 2;
+
+   
+    int localBlock[2];
+    MPI_Scatter(numbers, blockSize, MPI_INT, localBlock, blockSize, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Print the local block in the coordinator
+    std::cout << "Coordinator - Local block: " << localBlock[0] << " " << localBlock[1] << std::endl;
+
+    //// Decode the local block using the decodeBlock helper method
+    //decodeBlock(localBlock, inverseMatrix);
+
+    //// Print the decoded block (you can modify this part as needed)
+    //std::cout <<" Decoded block: " << localBlock[0] << " " << localBlock[1] << std::endl;
+    //
+
     // Print the elements of the numbers array
-    std::cout << "Numbers array elements: ";
+    std::cout << "Interger array elements: ";
     for (int i = 0; i < ciphertext.length(); ++i) {
         std::cout << numbers[i] << " ";
     }
@@ -158,6 +172,21 @@ void participant() {
 
     std::cout << "Rank " << world_rank << " Received Inverse matrix:" << std::endl;
     printArray(inverseMatrix);
+
+    // Receive the local block from the coordinator
+    int localBlock[2];
+    MPI_Scatter(nullptr, 0, MPI_INT, localBlock, 2, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Print the received local block in the participant
+    std::cout << "Rank " << world_rank << " - Received local block: " << localBlock[0] << " " << localBlock[1] << std::endl;
+
+    
+
+    // Decode the local block using the decodeBlock helper method
+    decodeBlock(localBlock, inverseMatrix);
+
+    // Print the decoded block (you can modify this part as needed)
+    std::cout << "Rank " << world_rank << " Decoded block: " << localBlock[0] << " " << localBlock[1] << std::endl;
 }
 
 int main(int argc, char** argv) {
