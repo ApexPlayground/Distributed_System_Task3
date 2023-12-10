@@ -149,6 +149,7 @@ void participant() {
     int inverseMatrix[2][2] = { {0, 0}, {0, 0} };
 
 
+
     // Add MPI Barrier
     MPI_Barrier(MPI_COMM_WORLD);
 
