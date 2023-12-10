@@ -1,173 +1,177 @@
 #include <iostream>
-#include <fstream>
-#include <cmath>
 #include <mpi.h>
 #include <string>
 
-// Helper method to print an array to the console
-void printArray(const int* array, int size) {
-    for (int i = 0; i < size; ++i) {
-        std::cout << array[i] << " ";
-    }
-    std::cout << std::endl;
-}
+// Helper methods
 
-// Helper method to decode a block using an inverse matrix
-void decodeBlock(const int* block, const int* inverseMatrix, int* decodedBlock) {
-    // Perform matrix multiplication and modulo 26
-    decodedBlock[0] = (block[0] * inverseMatrix[0] + block[1] * inverseMatrix[1]) % 26;
-    decodedBlock[1] = (block[0] * inverseMatrix[2] + block[1] * inverseMatrix[3]) % 26;
-
-    // Ensure the result is non-negative
-    if (decodedBlock[0] < 0) {
-        decodedBlock[0] += 26;
-    }
-    if (decodedBlock[1] < 0) {
-        decodedBlock[1] += 26;
+void printArray(int array[2][2]) {
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            std::cout << array[i][j] << " ";
+        }
+        std::cout << std::endl;
     }
 }
 
-// Helper method to calculate the modulo 26 inverse determinant
-int calculateInvDeterminant(int determinant) {
+int calculateInvDeterminant(int matrix[2][2]) {
+    int determinant = (matrix[0][0] * matrix[1][1] - (matrix[0][1] * matrix[1][0])) % 26;
+    if (determinant < 0) determinant += 26;
+
+    int inverseDeter = -1; 
     for (int i = 0; i < 26; ++i) {
         if ((determinant * i) % 26 == 1) {
-            return i;
+            inverseDeter = i;
+            break;
         }
     }
-    // If no inverse exists, return an error value (e.g., -1)
-    return -1;
+    return inverseDeter;
 }
 
-// Helper method to calculate the modulo 26 inverse of a 2x2 matrix
-void calculateInverse(const int* matrix, int* inverseMatrix) {
-    int determinant = (matrix[0] * matrix[3] - matrix[1] * matrix[2]) % 26;
+void calculateInverse(int matrix[2][2], int inverseDeterminant, int inverseMatrix[2][2]) {
+    inverseMatrix[0][0] = (matrix[1][1] * inverseDeterminant) % 26;
+    inverseMatrix[0][1] = (-matrix[0][1] * inverseDeterminant) % 26;
+    if (inverseMatrix[0][1] < 0) inverseMatrix[0][1] += 26;
 
-    // Ensure the determinant is non-negative
-    if (determinant < 0) {
-        determinant += 26;
+    inverseMatrix[1][0] = (-matrix[1][0] * inverseDeterminant) % 26;
+    if (inverseMatrix[1][0] < 0) inverseMatrix[1][0] += 26;
+
+    inverseMatrix[1][1] = (matrix[0][0] * inverseDeterminant) % 26;
+
+    if ((matrix[0][0] * inverseMatrix[0][0] + matrix[0][1] * inverseMatrix[1][0]) % 26 == 1 &&
+        (matrix[0][0] * inverseMatrix[0][1] + matrix[0][1] * inverseMatrix[1][1]) % 26 == 0 &&
+        (matrix[1][0] * inverseMatrix[0][0] + matrix[1][1] * inverseMatrix[1][0]) % 26 == 0 &&
+        (matrix[1][0] * inverseMatrix[0][1] + matrix[1][1] * inverseMatrix[1][1]) % 26 == 1) {
+        std::cout << "The inverse matrix is correct" << std::endl;
     }
+    else {
+        std::cout << "The inverse matrix is wrong" << std::endl;
+    }
+}
 
-    // Calculate the inverse determinant
-    int invDeterminant = calculateInvDeterminant(determinant);
+void decodeBlock(int block[2], int inverseMatrix[2][2]) {
+    int* result = new int[2];
 
-    // Calculate the elements of the inverse matrix
-    inverseMatrix[0] = (matrix[3] * invDeterminant) % 26;
-    inverseMatrix[1] = (-matrix[1] * invDeterminant) % 26;
-    inverseMatrix[2] = (-matrix[2] * invDeterminant) % 26;
-    inverseMatrix[3] = (matrix[0] * invDeterminant) % 26;
+    result[0] = (inverseMatrix[0][0] * block[0] + inverseMatrix[0][1] * block[1]) % 26;
+    result[1] = (inverseMatrix[1][0] * block[0] + inverseMatrix[1][1] * block[1]) % 26;
 
-    // Ensure the elements are non-negative
-    for (int i = 0; i < 4; ++i) {
-        if (inverseMatrix[i] < 0) {
-            inverseMatrix[i] += 26;
+    for (int i = 0; i < 2; ++i) {
+        if (result[i] < 0) {
+            result[i] += 26;
         }
     }
+
+    block[0] = result[0];
+    block[1] = result[1];
+}
+
+// Coordinator method
+void coordinator() {
+    int matrix[2][2] = { {0, 0}, {0, 0} };
+    int inverseMatrix[2][2];
+
+    // Read matrix from the user
+    std::cout << "Enter the 2x2 matrix elements, one by one:" << std::endl;
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            std::cout << "Enter element at position (" << i << "," << j << "): ";
+
+            while (!(std::cin >> matrix[i][j])) {
+                // Clear input buffer in case of invalid input
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter a valid integer: ";
+            }
+        }
+    }
+
+    std::cout << "Matrix input completed." << std::endl;
+    std::cout << "Matrix:" << std::endl;
+    printArray(matrix);
+
+    // Read the message from console or command line
+    std::string ciphertext;
+    std::cout << "Enter the ciphertext: ";
+    std::cin >> ciphertext;
+
+
+
+    // Convert message to uppercase
+    for (int i = 0; i < ciphertext.length(); ++i) {
+        ciphertext[i] = std::toupper(ciphertext[i]);
+    }
+
+    // Convert characters to numbers
+    int* numbers = new int[ciphertext.length() + 1];
+
+    for (int i = 0; i < ciphertext.length(); ++i) {
+        numbers[i] = ciphertext[i] - 'A';
+    }
+
+   
+    numbers[ciphertext.length()] = 0;
+
+    // Print the elements of the numbers array
+    std::cout << "Numbers array elements: ";
+    for (int i = 0; i < ciphertext.length(); ++i) {
+        std::cout << numbers[i] << " ";
+    }
+    std::cout << std::endl;
+
+    
+
+    int inverseDeterminant = calculateInvDeterminant(matrix);
+    std::cout << "Inverse determinant: " << inverseDeterminant << std::endl;
+
+    /*std::cout << " " << std::endl;*/
+
+    calculateInverse(matrix, inverseDeterminant, inverseMatrix);
+
+    std::cout << "Inverse matrix:" << std::endl;
+    printArray(inverseMatrix);
+
+    // Broadcast the inverse matrix to all other nodes
+    MPI_Bcast(&inverseMatrix[0][0], 4, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Add MPI Barrier
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    std::cout << std::endl;
+
+    delete[] numbers;
+}
+
+// Participant method
+void participant() {
+    int world_size, world_rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+    int inverseMatrix[2][2] = { {0, 0}, {0, 0} };
+
+
+    // Add MPI Barrier
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Receive the inverse matrix broadcasted by the coordinator
+    MPI_Bcast(&inverseMatrix[0][0], 4, MPI_INT, 0, MPI_COMM_WORLD);
+
+    std::cout << "Rank " << world_rank << " Received Inverse matrix:" << std::endl;
+    printArray(inverseMatrix);
 }
 
 int main(int argc, char** argv) {
-    // Initialize MPI
-    MPI_Init(&argc, &argv);
+    int world_size, world_rank;
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-    // Get the rank and size of each process
-    int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-    // Rank 0 acts as the coordinator, while other ranks are participants
-    if (rank == 0) {
-        // Coordinator code here
-        std::cout << "Coordinator (Rank " << rank << ") initialized.\n";
-
-        // a) Coordinator reads the matrix, calculates the inverse determinant, and broadcasts it.
-        int matrix[4];
-        std::cout << "Enter a 2x2 matrix: ";
-        for (int i = 0; i < 4; ++i) {
-            std::cin >> matrix[i];
-        }
-
-        int determinant = (matrix[0] * matrix[3] - matrix[1] * matrix[2]) % 26;
-        if (determinant < 0) {
-            determinant += 26;
-        }
-
-        int invDeterminant = calculateInvDeterminant(determinant);
-        MPI_Bcast(&invDeterminant, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // b) Coordinator calculates the inverse matrix (A-1).
-        int invMatrix[4];
-        calculateInverse(matrix, invMatrix);
-
-        // c) Coordinator checks the correctness of the inverse matrix.
-        // (Optional: Print the inverse matrix for verification)
-        std::cout << "Inverse Matrix: ";
-        printArray(invMatrix, 4);
-
-        // d) Coordinator broadcasts the inverse matrix to all other nodes.
-        MPI_Bcast(invMatrix, 4, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // e) Coordinator reads the ciphertext and distributes it among all nodes.
-        std::string ciphertext;
-        std::cout << "Enter the ciphertext: ";
-        std::cin >> ciphertext;
-        int cipherLength = ciphertext.length();
-        MPI_Bcast(&cipherLength, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        int* cipherArray = new int[cipherLength];
-        for (int i = 0; i < cipherLength; ++i) {
-            cipherArray[i] = ciphertext[i] - 'A'; // Convert character to corresponding number
-        }
-        MPI_Scatter(cipherArray, 1, MPI_INT, cipherArray, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // g) Coordinator collects decrypted blocks from participants.
-        int* decryptedBlocks = new int[cipherLength];
-        MPI_Gather(decryptedBlocks, 1, MPI_INT, decryptedBlocks, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // h) Coordinator converts the decrypted message to characters.
-        std::string decryptedMessage;
-        for (int i = 0; i < cipherLength; ++i) {
-            decryptedMessage += static_cast<char>(decryptedBlocks[i] + 'A'); // Convert number to character
-        }
-
-        // i) Coordinator outputs the deciphered text.
-        std::cout << "Deciphered Text: " << decryptedMessage << std::endl;
-
-        delete[] cipherArray;
-        delete[] decryptedBlocks;
+    if (world_rank == 0) {
+        coordinator();
     }
     else {
-        // Participant code here
-        std::cout << "Participant (Rank " << rank << ") initialized.\n";
-
-        // a) Participants receive the inverse determinant broadcasted by the coordinator.
-        int invDeterminant;
-        MPI_Bcast(&invDeterminant, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // b) Participants receive the inverse matrix broadcasted by the coordinator.
-        int invMatrix[4];
-        MPI_Bcast(invMatrix, 4, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // e) Participants receive the length of the ciphertext broadcasted by the coordinator.
-        int cipherLength;
-        MPI_Bcast(&cipherLength, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // e) Participants receive their portion of the ciphertext from the coordinator.
-        int* receiveBuffer = new int[cipherLength / size];
-        MPI_Scatter(nullptr, 0, MPI_INT, receiveBuffer, cipherLength / size, MPI_INT, 0, MPI_COMM_WORLD);
-
-        // Use the receiveBuffer in the decoding process
-        int* decodedBlocks = new int[cipherLength / size * 2];  // Each element of receiveBuffer corresponds to 2 decoded values
-        decodeBlock(receiveBuffer, invMatrix, decodedBlocks);
-
-        // g) Participants send their decrypted blocks to the coordinator.
-        MPI_Gather(decodedBlocks, cipherLength / size * 2, MPI_INT, nullptr, 0, MPI_INT, 0, MPI_COMM_WORLD);
-
-        delete[] receiveBuffer;
-        delete[] decodedBlocks;
+        participant();
     }
 
-
-    // Finalize MPI
     MPI_Finalize();
-
     return 0;
 }
